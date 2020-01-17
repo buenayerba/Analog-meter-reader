@@ -150,7 +150,7 @@ def process_top_dials(seg_threshold, min_area, max_area,
     median = cv2.medianBlur(mask, 21)  
     mask = cv2.morphologyEx(median, cv2.MORPH_CLOSE, None, iterations = 6)
     mask = cv2.morphologyEx(median, cv2.MORPH_OPEN, None, iterations = 3)
-    imshow(mask, "MASK")
+#     imshow(mask, "MASK")
 
     num_pixels = mask.size
     num_nonzero_pixels = cv2.countNonZero(mask)
@@ -176,7 +176,7 @@ def process_top_dials(seg_threshold, min_area, max_area,
         angle = from_arrow_cnt_to_angle(tmp, cnt, thresh_angle, k, NUM_SAMPLE_POINTS_SMALL_ARROW)
         if angle == float('inf'):
             print "ARROW TIP NOT FOUND. Skipping this contour."
-            imshow(tmp, "Arrow tip not found!")
+#             imshow(tmp, "Arrow tip not found!")
             continue
         print "(searching ...) Angle {}: {}".format(i, "%.1f"%angle)
         angles.append((cnt, angle))
@@ -261,171 +261,190 @@ def long_arrow_angle_to_reading(angle_deg):
 # ======================================================
 # ======================================================
 
-# CONSTANTS:
-K = 10
-THRESH_ANGLE = 50
-NUM_SAMPLE_POINTS_SMALL_ARROW = 50
-NUM_SAMPLE_POINTS_LONG_ARROW = 250
-SMALL_ARROW_MIN_AREA = 3000
-SMALL_ARROW_MAX_AREA = 6000
 
-LONG_ARROW_MIN_AREA = 130000
-LONG_ARROW_MAX_AREA = 200000
+while True:
+	try:
+		# CONSTANTS:
+		K = 10
+		THRESH_ANGLE = 50
+		NUM_SAMPLE_POINTS_SMALL_ARROW = 50
+		NUM_SAMPLE_POINTS_LONG_ARROW = 250
+		SMALL_ARROW_MIN_AREA = 3000
+		SMALL_ARROW_MAX_AREA = 6000
 
-# =============================================================================
-# STEP 0: Take Image
-# =============================================================================
-image = None
-with picamera.PiCamera() as camera:
-	camera.resolution = (1920, 1440)
-	camera.vflip = True
-	camera.hflip = True
-	rawCapture = PiRGBArray(camera, size=(1920, 1440))
-	print("LED ON")
-	GPIO.output(12, GPIO.HIGH)
-	time.sleep(2)
+		LONG_ARROW_MIN_AREA = 130000
+		LONG_ARROW_MAX_AREA = 200000
 
-	camera.flash_mode = 'on'
-	camera.capture(rawCapture, format="bgr")
-	image = rawCapture.array
+		# =============================================================================
+		# STEP 0: Take Image
+		# =============================================================================
+		image = None
+		with picamera.PiCamera() as camera:
+			camera.resolution = (1920, 1440)
+			camera.vflip = True
+			camera.hflip = True
+			rawCapture = PiRGBArray(camera, size=(1920, 1440))
+			print("LED ON")
+			GPIO.output(12, GPIO.HIGH)
+			time.sleep(2)
 
-	time.sleep(1)
-	print("LED OFF")
-	GPIO.output(12, GPIO.LOW)
+			camera.flash_mode = 'on'
+			camera.capture(rawCapture, format="bgr")
+			image = rawCapture.array
 
-# =============================================================================
-# STEP 1: Get the Region of Interest (ROI) and Find Tilt Angle of the Meter
-# =============================================================================
+			time.sleep(1)
+			print("LED OFF")
+			GPIO.output(12, GPIO.LOW)
 
-print "*"*30, "\nSTEP 1: LOOKING FOR THE METER ..."
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-imshow(gray)
+		# =============================================================================
+		# STEP 1: Get the Region of Interest (ROI) and Find Tilt Angle of the Meter
+		# =============================================================================
 
-retval, mask = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
-imshow(mask)
-contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-contours = sorted(contours, key = cv2.contourArea, reverse = True)
-index = 1 # alternatively can use a range of reasonable areas
-cnt = contours[index]
+		print "*"*30, "\nSTEP 1: LOOKING FOR THE METER ..."
+# 		IMG_PATH ='sample-images/meter_type_2_1.jpg'
+# 		image = cv2.imread(IMG_PATH)
+		gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+		
+		timestamp = str(int(time.time()))
+		cv2.imwrite("captured_images/{}.jpg".format(timestamp), image)
+		
+# 		imshow(gray)
 
-# Find Tilt Angle of the Meter
-rect = cv2.minAreaRect(cnt)
-box = cv2.boxPoints(rect)
-box = np.int0(box)
-image = cv2.drawContours(image,[box],0,(0,0,255),6)
-base_angle = get_angle([100, 0],  box[0] - box[1])
-print "Tilt (base) angle of the meter:", "%.1f"%base_angle
-imshow(image, "Minimum area bounding rectangle\nBase angle: {0:.1f} degrees".format(base_angle))
+		retval, mask = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
+# 		imshow(mask)
+		contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+		contours = sorted(contours, key = cv2.contourArea, reverse = True)
+		index = 1 # alternatively can use a range of reasonable areas
+		cnt = contours[index]
 
-# Find ROI of the meter
-x_min = min([pair[0][0] for pair in cnt])
-x_max = max([pair[0][0] for pair in cnt])
-y_min = min([pair[0][1] for pair in cnt])
-y_max = max([pair[0][1] for pair in cnt])
+		# Find Tilt Angle of the Meter
+		rect = cv2.minAreaRect(cnt)
+		box = cv2.boxPoints(rect)
+		box = np.int0(box)
+		image = cv2.drawContours(image,[box],0,(0,0,255),6)
+		base_angle = get_angle([100, 0],  box[0] - box[1])
+		print "Tilt (base) angle of the meter:", "%.1f"%base_angle
+# 		imshow(image, "Minimum area bounding rectangle\nBase angle: {0:.1f} degrees".format(base_angle))
 
-meter_ROI = image[y_min:y_max, x_min:x_max] # Meter's ROI
-imshow(meter_ROI, "Region of interest: Meter")
+		# Find ROI of the meter
+		x_min = min([pair[0][0] for pair in cnt])
+		x_max = max([pair[0][0] for pair in cnt])
+		y_min = min([pair[0][1] for pair in cnt])
+		y_max = max([pair[0][1] for pair in cnt])
 
-REF_METER_HEIGHT = 2100.0
-scale = REF_METER_HEIGHT / len(meter_ROI)
-meter_ROI = cv2.resize(meter_ROI, None, fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
-y_len, x_len = len(meter_ROI), len(meter_ROI[0])
+		meter_ROI = image[y_min:y_max, x_min:x_max] # Meter's ROI
+# 		imshow(meter_ROI, "Region of interest: Meter")
 
-# =============================================================================
-# STEP 2: Get angles of small arrows
-# =============================================================================
+		REF_METER_HEIGHT = 2100.0
+		scale = REF_METER_HEIGHT / len(meter_ROI)
+		meter_ROI = cv2.resize(meter_ROI, None, fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
+		y_len, x_len = len(meter_ROI), len(meter_ROI[0])
 
-print "*"*30, "\nSTEP 2: LOOKING FOR ANGLES OF THE SHORT ARROWS ..."
-# ROI:
-y1, y2, x1, x2 = int(0.12*y_len), int(0.35*y_len), int(0.1*x_len), int(0.9*x_len)
-top_dials = meter_ROI[y1:y2, x1:x2]
-imshow(top_dials, "Top dials")
-top_dials_gray = cv2.cvtColor(top_dials, cv2.COLOR_BGR2GRAY)
+		# =============================================================================
+		# STEP 2: Get angles of small arrows
+		# =============================================================================
 
-# Binary search to find a good segmentaiton threshold.
-l, r = 0, 255
-while r - l >= 0:
-	mid = (l+r) / 2
-	print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
-	res = process_top_dials(mid, SMALL_ARROW_MIN_AREA, SMALL_ARROW_MAX_AREA, 
-						   THRESH_ANGLE, K, NUM_SAMPLE_POINTS_SMALL_ARROW)
-	if res == "low":
-		l = mid+1
-	elif res == "high":
-		r = mid-1
-	else:
-		break
+		print "*"*30, "\nSTEP 2: LOOKING FOR ANGLES OF THE SHORT ARROWS ..."
+		# ROI:
+		y1, y2, x1, x2 = int(0.12*y_len), int(0.35*y_len), int(0.1*x_len), int(0.9*x_len)
+		top_dials = meter_ROI[y1:y2, x1:x2]
+# 		imshow(top_dials, "Top dials")
+		top_dials_gray = cv2.cvtColor(top_dials, cv2.COLOR_BGR2GRAY)
+
+		# Binary search to find a good segmentaiton threshold.
+		l, r = 0, 255
+		while r - l >= 0:
+			mid = (l+r) / 2
+			print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
+			res = process_top_dials(mid, SMALL_ARROW_MIN_AREA, SMALL_ARROW_MAX_AREA, 
+								   THRESH_ANGLE, K, NUM_SAMPLE_POINTS_SMALL_ARROW)
+			if res == "low":
+				l = mid+1
+			elif res == "high":
+				r = mid-1
+			else:
+				break
 	
-imshow(top_dials, "Four short arrows detected!")
+# 		imshow(top_dials, "Four short arrows detected!")
 
-print "\n\n", "#"*30, "\n", "#"*30
-digits = []
-if res not in ["high", "low"]:
-	print "FOUR GOOD ANGLES FOUND!"
-	print "ANGLES OF THE SHORT ARROWS (FROM LEFT TO RIGHT):"
-	for i, angle in enumerate(res):
-		print "   Angle {}: {}".format(i, "%.1f"%angle)
+		print "\n\n", "#"*30, "\n", "#"*30
+		digits = []
+		if res not in ["high", "low"]:
+			print "FOUR GOOD ANGLES FOUND!"
+			print "ANGLES OF THE SHORT ARROWS (FROM LEFT TO RIGHT):"
+			for i, angle in enumerate(res):
+				print "   Angle {}: {}".format(i, "%.1f"%angle)
 	
-	print "\n\nANGLES ADJUSTED W.R.T. THE BASE ANGLE (FROM LEFT TO RIGHT):"
-	for i, angle in enumerate(res):
-		print "   Angle {}: {}".format(i, "%.1f"%(angle - base_angle))
-		dig = short_arrow_angle_to_reading(angle - base_angle, (-1)**(i+1))
-		digits.append(str(dig))
-else:
-	print "ANGLES NOT FOUND!"
+			print "\n\nANGLES ADJUSTED W.R.T. THE BASE ANGLE (FROM LEFT TO RIGHT):"
+			for i, angle in enumerate(res):
+				print "   Angle {}: {}".format(i, "%.1f"%(angle - base_angle))
+				dig = short_arrow_angle_to_reading(angle - base_angle, (-1)**(i+1))
+				digits.append(str(dig))
+		else:
+			print "ANGLES NOT FOUND!"
 
-top_reading = "".join(digits)
-print "TOP DIAL READING:", top_reading
-print "#"*30, "\n", "#"*30, "\n\n" 
+		top_reading = "".join(digits)
+		print "TOP DIAL READING:", top_reading
+		print "#"*30, "\n", "#"*30, "\n\n" 
 
-# =============================================================================
-# STEP 3: Get angles of the long arrow
-# =============================================================================
+		# =============================================================================
+		# STEP 3: Get angles of the long arrow
+		# =============================================================================
 
-print "\n\n", "*"*30, "\nSTEP 3: LOOKING FOR ANGLE OF THE LONG ARROW ..."
-y1, y2, x1, x2 = int(0.3*y_len), int(0.65*y_len), int(0.2*x_len), int(0.8*x_len)
-bottom_dial = meter_ROI[y1:y2, x1:x2]
-imshow(bottom_dial, "Bottom dial")
+		print "\n\n", "*"*30, "\nSTEP 3: LOOKING FOR ANGLE OF THE LONG ARROW ..."
+		y1, y2, x1, x2 = int(0.3*y_len), int(0.65*y_len), int(0.2*x_len), int(0.8*x_len)
+		bottom_dial = meter_ROI[y1:y2, x1:x2]
+# 		imshow(bottom_dial, "Bottom dial")
 
-bottom_dial_gray = cv2.cvtColor(bottom_dial, cv2.COLOR_BGR2GRAY)
+		bottom_dial_gray = cv2.cvtColor(bottom_dial, cv2.COLOR_BGR2GRAY)
 
-# Binary search to find a good segmentaiton threshold.
-l, r = 0, 255
-while l <= r:
-	mid = (l+r) / 2
-	print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
+		# Binary search to find a good segmentaiton threshold.
+		l, r = 0, 255
+		while l <= r:
+			mid = (l+r) / 2
+			print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
 
-	retval, mask = cv2.threshold(bottom_dial_gray, mid, 255, cv2.THRESH_BINARY_INV )
-	median = cv2.medianBlur(mask, 21)  
-	mask = cv2.morphologyEx(median, cv2.MORPH_CLOSE, None, iterations = 6)
-	mask = cv2.morphologyEx(median, cv2.MORPH_OPEN, None, iterations = 3)
-	imshow(mask, "MASK")
+			retval, mask = cv2.threshold(bottom_dial_gray, mid, 255, cv2.THRESH_BINARY_INV )
+			median = cv2.medianBlur(mask, 21)  
+			mask = cv2.morphologyEx(median, cv2.MORPH_CLOSE, None, iterations = 6)
+			mask = cv2.morphologyEx(median, cv2.MORPH_OPEN, None, iterations = 3)
+# 			imshow(mask, "MASK")
 
-	contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-	contours.sort(key = cv2.contourArea, reverse = True) # Sort by area
-	large_arrow_cnt = contours[0]
-	cnt_area = cv2.contourArea(large_arrow_cnt)
+			contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+			contours.sort(key = cv2.contourArea, reverse = True) # Sort by area
+			large_arrow_cnt = contours[0]
+			cnt_area = cv2.contourArea(large_arrow_cnt)
 
-	print "AREA", cnt_area
+			print "AREA", cnt_area
 
-	if cnt_area < LONG_ARROW_MIN_AREA:
-		print "TOO LOW!"
-		l = mid+1
-	elif cnt_area > LONG_ARROW_MAX_AREA:
-		print "TOO HIGH!"
-		r = mid-1
-	else:
-		print "GOOD!"
-		break
+			if cnt_area < LONG_ARROW_MIN_AREA:
+				print "TOO LOW!"
+				l = mid+1
+			elif cnt_area > LONG_ARROW_MAX_AREA:
+				print "TOO HIGH!"
+				r = mid-1
+			else:
+				print "GOOD!"
+				break
 
-angle = from_long_arrow_cnt_to_angle(bottom_dial, large_arrow_cnt, THRESH_ANGLE, K, NUM_SAMPLE_POINTS_LONG_ARROW)
-print "\n\n", "#"*30, "\n", "#"*30
-print "ANGLE OF THE LONG ARROW: {}".format("%.1f"%angle)
-print "ANGLE OF THE LONG ARROW ADJUSTED W.R.T. THE BASE ANGLE: {}".format("%.1f"%(angle-base_angle))
-bottom_reading = str(int(long_arrow_angle_to_reading(angle-base_angle)))
-print "LOWER DIAL READING", bottom_reading
-print "#"*30, "\n", "#"*30, "\n\n" 
-imshow(bottom_dial, "Long arrow detected!")
+		angle = from_long_arrow_cnt_to_angle(bottom_dial, large_arrow_cnt, THRESH_ANGLE, K, NUM_SAMPLE_POINTS_LONG_ARROW)
+		print "\n\n", "#"*30, "\n", "#"*30
+		print "ANGLE OF THE LONG ARROW: {}".format("%.1f"%angle)
+		print "ANGLE OF THE LONG ARROW ADJUSTED W.R.T. THE BASE ANGLE: {}".format("%.1f"%(angle-base_angle))
+		bottom_reading = str(int(long_arrow_angle_to_reading(angle-base_angle)))
+		print "LOWER DIAL READING", bottom_reading
+		print "#"*30, "\n", "#"*30, "\n\n" 
+# 		imshow(bottom_dial, "Long arrow detected!")
+
+		f=open("data.txt", "a+")
+		line = ",".join([timestamp, top_reading, bottom_reading]) + "\n"
+		f.write(line)
+	except:
+		f=open("data.txt", "a+")
+		line = ",".join([timestamp, "ERR", "ERR"]) + "\n"
+		f.write(line)
+	time.sleep(600)
+ 
 
 
 

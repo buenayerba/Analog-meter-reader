@@ -183,7 +183,68 @@ def process_top_dials(seg_threshold, min_area, max_area,
     # Case 3: If four good contours haven't been found, threshold is too low.
     print "   threshold is too low"
     return "low"
+    
 
+
+def from_long_arrow_cnt_to_angle(image, contour, thresh_angle, k, num_sample_poits):
+    interval = len(contour)/num_sample_poits
+    samplePoints = contour[0:len(contour):interval]
+
+    # Draw a contour
+    for index in range(len(samplePoints)):
+        cv2.circle(image, tuple(samplePoints[index][0]), 3, (255, 255, 255), 2) 
+
+    min_curv_angle = float('inf')
+    min_angle_deg, max_angle_deg = 45, 135 
+    
+    tip_index = -1
+    for j in range(len(samplePoints)):
+        # determine points corresponding to indices j-k, j and j+k
+        jCoord = samplePoints[j][0]
+        minusK = samplePoints[(j-k)%len(samplePoints)][0]
+        plusK = samplePoints[(j+k)%len(samplePoints)][0]
+        kCurvAngle = get_angle(minusK - jCoord, plusK - jCoord)    
+        
+        if kCurvAngle <= thresh_angle and kCurvAngle < min_curv_angle:
+            min_curv_angle = kCurvAngle
+            orientation = np.cross(minusK - jCoord, plusK - jCoord)
+            if orientation >= 0:
+                tip_index = j
+                angle = get_arrow_angle(samplePoints, tip_index)
+                angle_degrees = angle*180.0/3.14
+                print angle_degrees
+                if min_angle_deg <= angle_degrees <= max_angle_deg:
+                    break
+                
+    if tip_index!=-1:
+        angle = get_arrow_angle(samplePoints, tip_index)
+        angle_degrees = angle*180.0/3.14
+        print angle_degrees
+        draw_arrow_orientation(image, samplePoints, tip_index, angle, 100)
+        jCoord = samplePoints[tip_index][0] # Draw arrow tip as blue circles
+        cv2.circle(image, tuple(jCoord), 3, (255, 0, 0), 10)
+        cv2.putText(image, str("%.1f"%angle_degrees), (jCoord[0], jCoord[1]-20), cv2.FONT_HERSHEY_SIMPLEX, 3, (0,0,255), 5)
+        return angle_degrees
+    else: 
+        return float('inf')    
+        
+def short_arrow_angle_to_reading(angle_deg, direction):
+    if direction == 1: # (clockwise)
+        angle_deg -= 90
+        if angle_deg < 0:
+            angle_deg += 360
+        return int(angle_deg / 180.0 * 5)
+    
+    else: # (counter-clockwise)
+        angle_deg = 180 - angle_deg
+        angle_deg -= 90
+        if angle_deg < 0:
+            angle_deg += 360
+        return int(angle_deg / 180.0 * 5)
+        
+def long_arrow_angle_to_reading(angle_deg):
+    angle_deg -= 45
+    return angle_deg / 90.0 * 1500
 
 # ======================================================
 # ======================================================
@@ -201,6 +262,9 @@ NUM_SAMPLE_POINTS_SMALL_ARROW = 50
 NUM_SAMPLE_POINTS_LONG_ARROW = 250
 SMALL_ARROW_MIN_AREA = 3000
 SMALL_ARROW_MAX_AREA = 6000
+
+LONG_ARROW_MIN_AREA = 130000
+LONG_ARROW_MAX_AREA = 200000
 
 # =============================================================================
 # STEP 1: Get the Region of Interest (ROI) and Find Tilt Angle of the Meter
@@ -255,31 +319,37 @@ top_dials_gray = cv2.cvtColor(top_dials, cv2.COLOR_BGR2GRAY)
 # Binary search to find a good segmentaiton threshold.
 l, r = 0, 255
 while r - l >= 0:
-    mid = (l+r) / 2
-    print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
-    res = process_top_dials(mid, SMALL_ARROW_MIN_AREA, SMALL_ARROW_MAX_AREA, 
-                           THRESH_ANGLE, K, NUM_SAMPLE_POINTS_SMALL_ARROW)
-    if res == "low":
-        l = mid+1
-    elif res == "high":
-        r = mid-1
-    else:
-        break
-        
+	mid = (l+r) / 2
+	print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
+	res = process_top_dials(mid, SMALL_ARROW_MIN_AREA, SMALL_ARROW_MAX_AREA, 
+						   THRESH_ANGLE, K, NUM_SAMPLE_POINTS_SMALL_ARROW)
+	if res == "low":
+		l = mid+1
+	elif res == "high":
+		r = mid-1
+	else:
+		break
+	
 imshow(top_dials, "Four short arrows detected!")
 
 print "\n\n", "#"*30, "\n", "#"*30
+digits = []
 if res not in ["high", "low"]:
-    print "FOUR GOOD ANGLES FOUND!"
-    print "ANGLES OF THE SHORT ARROWS (FROM LEFT TO RIGHT):"
-    for i, angle in enumerate(res):
-        print "   Angle {}: {}".format(i, "%.1f"%angle)
-        
-    print "\n\nANGLES ADJUSTED W.R.T. THE BASE ANGLE (FROM LEFT TO RIGHT):"
-    for i, angle in enumerate(res):
-        print "   Angle {}: {}".format(i, "%.1f"%(angle - base_angle))
+	print "FOUR GOOD ANGLES FOUND!"
+	print "ANGLES OF THE SHORT ARROWS (FROM LEFT TO RIGHT):"
+	for i, angle in enumerate(res):
+		print "   Angle {}: {}".format(i, "%.1f"%angle)
+	
+	print "\n\nANGLES ADJUSTED W.R.T. THE BASE ANGLE (FROM LEFT TO RIGHT):"
+	for i, angle in enumerate(res):
+		print "   Angle {}: {}".format(i, "%.1f"%(angle - base_angle))
+		dig = short_arrow_angle_to_reading(angle - base_angle, (-1)**(i+1))
+		digits.append(str(dig))
 else:
-    print "ANGLES NOT FOUND!"
+	print "ANGLES NOT FOUND!"
+
+top_reading = "".join(digits)
+print "TOP DIAL READING:", top_reading
 print "#"*30, "\n", "#"*30, "\n\n" 
 
 # =============================================================================
@@ -292,20 +362,49 @@ bottom_dial = meter_ROI[y1:y2, x1:x2]
 imshow(bottom_dial, "Bottom dial")
 
 bottom_dial_gray = cv2.cvtColor(bottom_dial, cv2.COLOR_BGR2GRAY)
-retval, mask = cv2.threshold(bottom_dial_gray, 75, 255, cv2.THRESH_BINARY_INV )
-median = cv2.medianBlur(mask, 21)  
-mask = cv2.morphologyEx(median, cv2.MORPH_CLOSE, None, iterations = 6)
-mask = cv2.morphologyEx(median, cv2.MORPH_OPEN, None, iterations = 3)
-imshow(mask, "MASK")
 
-contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-contours.sort(key = cv2.contourArea, reverse = True) # Sort by area
-large_arrow_cnt = contours[0]
-angle = from_arrow_cnt_to_angle(bottom_dial, large_arrow_cnt, THRESH_ANGLE, K, NUM_SAMPLE_POINTS_LONG_ARROW)
+# Binary search to find a good segmentaiton threshold.
+l, r = 0, 255
+while l <= r:
+	mid = (l+r) / 2
+	print "*"*30, "\n", "TRY THRESHOLD {}".format(mid)
+
+	retval, mask = cv2.threshold(bottom_dial_gray, mid, 255, cv2.THRESH_BINARY_INV )
+	median = cv2.medianBlur(mask, 21)  
+	mask = cv2.morphologyEx(median, cv2.MORPH_CLOSE, None, iterations = 6)
+	mask = cv2.morphologyEx(median, cv2.MORPH_OPEN, None, iterations = 3)
+	imshow(mask, "MASK")
+
+	contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+	contours.sort(key = cv2.contourArea, reverse = True) # Sort by area
+	large_arrow_cnt = contours[0]
+	cnt_area = cv2.contourArea(large_arrow_cnt)
+
+	print "AREA", cnt_area
+
+	if cnt_area < LONG_ARROW_MIN_AREA:
+		print "TOO LOW!"
+		l = mid+1
+	elif cnt_area > LONG_ARROW_MAX_AREA:
+		print "TOO HIGH!"
+		r = mid-1
+	else:
+		print "GOOD!"
+		break
+
+angle = from_long_arrow_cnt_to_angle(bottom_dial, large_arrow_cnt, THRESH_ANGLE, K, NUM_SAMPLE_POINTS_LONG_ARROW)
 print "\n\n", "#"*30, "\n", "#"*30
-print "ANGLE OF THE LOGN ARROW: {}".format("%.1f"%angle)
-print "ANGLE OF THE LOGN ARROW ADJUSTED W.R.T. THE BASE ANGLE: {}".format("%.1f"%(angle-base_angle))
+print "ANGLE OF THE LONG ARROW: {}".format("%.1f"%angle)
+print "ANGLE OF THE LONG ARROW ADJUSTED W.R.T. THE BASE ANGLE: {}".format("%.1f"%(angle-base_angle))
+bottom_reading = str(int(long_arrow_angle_to_reading(angle-base_angle)))
+print "LOWER DIAL READING", bottom_reading
 print "#"*30, "\n", "#"*30, "\n\n" 
 imshow(bottom_dial, "Long arrow detected!")
 
+FILE_NAME = "data.txt"
+f=open(FILE_NAME, "a+")
+t = str(int(time.time()))
+line = ",".join([t, top_reading, bottom_reading]) + "\n"
+f.write(line)
+f.close()
 
