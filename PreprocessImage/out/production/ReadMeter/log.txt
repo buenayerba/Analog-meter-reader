@@ -1,0 +1,9 @@
+4.0
+4.0
+Traceback (most recent call last):
+  File "find_base_angle.py", line 51, in <module>
+    returnBaseAngle()
+  File "find_base_angle.py", line 24, in returnBaseAngle
+    gray = cv2.cvtColor(image_orig, cv2.COLOR_BGR2GRAY)
+cv2.error: OpenCV(4.2.0) /tmp/opencv-20200105-17262-cwpzm4/opencv-4.2.0/modules/imgproc/src/color.cpp:182: error: (-215:Assertion failed) !_src.empty() in function 'cvtColor'
+
