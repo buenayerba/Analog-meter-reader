@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<properties>
+    <image_unedited>original_2020-05-20-12-31-48.jpeg</image_unedited>
+    <meter_type>3</meter_type>
+    <base_angle>4.0</base_angle>
+    <number_of_dial>5</number_of_dial>
+    <orientation>2</orientation>
+    <coordinates>
+        <upper_left_x>0.0</upper_left_x>
+        <upper_left_y>0.0</upper_left_y>
+        <bottom_left_x>0.0</bottom_left_x>
+        <bottom_left_y>0.0</bottom_left_y>
+        <upper_right_x>0.0</upper_right_x>
+        <upper_right_y>0.0</upper_right_y>
+        <bottom_right_x>0.0</bottom_right_x>
+        <bottom_right_y>0.0</bottom_right_y>
+    </coordinates>
+    <boundary_reading>
+        <left_reading>0</left_reading>
+        <right_reading>0</right_reading>
+    </boundary_reading>
+    <log_or_linear>1</log_or_linear>
+    <time_interval_between_pictures>600</time_interval_between_pictures>
+    <filename_to_save>meter_readings.txt</filename_to_save>
+</properties>
